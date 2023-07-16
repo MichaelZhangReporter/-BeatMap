@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Interactive Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <style>
+        #map {
+            height: 600px;
+            width: 100%;
+        }
+    </style>
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+</head>
+
+<body>
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+    <script>
+        function onEachFeature(feature, layer) {
+            if (feature.properties && feature.properties.Beats) {
+                let popupContent = `Beat: ${feature.properties.Beats}<br>`;
+                feature.properties.responseTimes.forEach(time => {
+                    popupContent += `2019<br> Response Time: ${time['2019']}, Offense Count: ${time['ofnum2019']}<br><br>`;
+                    popupContent += `2020<br> Response Time: ${time['2020']}, Offense Count: ${time['ofnum2020']}<br><br>`;
+                    popupContent += `2021<br> Response Time: ${time['2021']}, Offense Count: ${time['ofnum2021']}<br><br>`;
+                    popupContent += `2022<br> Response Time: ${time['2022']}, Offense Count: ${time['ofnum2022']}<br><br>`;
+                    popupContent += `2023<br> Response Time: ${time['2023']}, Offense Count: ${time['ofnum2023']}<br><br>`;
+                    popupContent += `Average Response Time: ${time['Average']}<br>`;
+                    popupContent += `Average Offense Count: ${time['AverageOffense']}<br>`;
+                });
+                layer.bindPopup(popupContent);
+            }
+        }
+        // Initialize the map
+        var map = L.map('map').setView([29.76, -95.37], 11);
+
+        // Add a tile layer (base map) to the map
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+        }).addTo(map);
+
+        // Use jQuery's $.ajax() method to fetch the GeoJSON file
+        $.ajax({
+            url: './COH_POLICE_BEATS.geojson',
+            dataType: 'json',
+            success: function (geojsonData) {
+                var oReq = new XMLHttpRequest();
+                oReq.open("GET", './5-year-average-response-time-in-minutes.xlsx', true);
+                oReq.responseType = "arraybuffer";
+
+                oReq.onload = function (e) {
+                    var arraybuffer = oReq.response;
+                    var data = new Uint8Array(arraybuffer);
+                    var arr = [];
+                    for (var i = 0; i != data.length; ++i) arr[i] = String.fromCharCode(data[i]);
+                    var bstr = arr.join("");
+
+                    const workbook = XLSX.read(bstr, { type: 'binary' });
+                    const worksheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[worksheetName];
+                    let excelData = XLSX.utils.sheet_to_json(worksheet);
+                    console.log(excelData)
+
+                    geojsonData.features.forEach(feature => {
+                        const beat = feature.properties.Beats;
+                        feature.properties.responseTimes = excelData
+                            .filter(row => row.Beat === beat)
+                            .map(row => ({ 2019: row['2019'], 2020: row['2020'], 2021: row['2021'], 2022: row['2022'], 2023: row['2023'], Average: row['Average'], AverageOffense: row['Average Offense'], ofnum2019: row['2019Count'], ofnum2020: row['2020Count'], ofnum2021: row['2021Count'], ofnum2022: row['2022Count'], ofnum2023: row['2023Count']}));
+                    });
+
+                    L.geoJSON(geojsonData, {
+                        onEachFeature: onEachFeature
+                    }).addTo(map);
+                }
+
+                oReq.send();
+            }
+        });
+    </script>
+</body>
+
+</html>
